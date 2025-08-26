@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Plinko Game</title>
+  <style>
+    body {
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #board {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px auto;
+    }
+    .row {
+      display: flex;
+      justify-content: center;
+    }
+    .peg {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #555;
+      margin: 8px;
+    }
+    .slot {
+      width: 40px;
+      height: 40px;
+      margin: 5px;
+      border: 1px solid #666;
+      border-radius: 5px;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    .ball {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: red;
+      position: absolute;
+    }
+    input, button {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 8px;
+      border: none;
+    }
+    #container {
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎲 Plinko</h1>
+  <input id="bet" type="number" placeholder="Bet Amount" />
+  <input id="rows" type="number" placeholder="Rows (8,10,12)" />
+  <button onclick="dropBall()">Drop Ball</button>
+
+  <div id="container">
+    <div id="board"></div>
+    <div id="ball" class="ball" style="display:none;"></div>
+  </div>
+  <p id="result"></p>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    const multipliers = {
+      8: [0.5, 1, 2, 5, 10, 5, 2, 1, 0.5],
+      10: [0.2, 0.5, 1, 2, 5, 10, 5, 2, 1, 0.5, 0.2],
+      12: [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 10, 5, 2, 1, 0.5, 0.2, 0.1]
+    };
+
+    const board = document.getElementById("board");
+    const resultDiv = document.getElementById("result");
+    const ball = document.getElementById("ball");
+
+    function buildBoard(rows) {
+      board.innerHTML = "";
+      for (let r = 0; r < rows; r++) {
+        let row = document.createElement("div");
+        row.className = "row";
+        for (let c = 0; c <= r; c++) {
+          let peg = document.createElement("div");
+          peg.className = "peg";
+          row.appendChild(peg);
+        }
+        board.appendChild(row);
+      }
+      // slots
+      let slotRow = document.createElement("div");
+      slotRow.className = "row";
+      multipliers[rows].forEach(m => {
+        let slot = document.createElement("div");
+        slot.className = "slot";
+        slot.innerText = m + "x";
+        slotRow.appendChild(slot);
+      });
+      board.appendChild(slotRow);
+    }
+
+    function dropBall() {
+      const bet = parseFloat(document.getElementById("bet").value);
+      const rows = parseInt(document.getElementById("rows").value);
+      if (isNaN(bet) || bet <= 0) return alert("Enter valid bet");
+      if (![8,10,12].includes(rows)) return alert("Rows must be 8, 10, or 12");
+
+      buildBoard(rows);
+
+      // Animation
+      let x = board.offsetWidth / 2;
+      let y = 0;
+      let slotIndex = 0;
+
+      ball.style.left = x + "px";
+      ball.style.top = y + "px";
+      ball.style.display = "block";
+
+      let step = 0;
+      let path = [];
+
+      // generate path (random left/right)
+      for (let i = 0; i < rows; i++) {
+        let dir = Math.random() < 0.5 ? -1 : 1;
+        slotIndex += dir === 1 ? 1 : 0;
+        path.push(dir);
+      }
+
+      function animate() {
+        if (step < path.length) {
+          x += path[step] * 20;
+          y += 40;
+          ball.style.left = x + "px";
+          ball.style.top = y + "px";
+          step++;
+          setTimeout(animate, 400);
+        } else {
+          // landed
+          const slots = multipliers[rows];
+          if (slotIndex < 0) slotIndex = 0;
+          if (slotIndex >= slots.length) slotIndex = slots.length - 1;
+
+          const multiplier = slots[slotIndex];
+          const payout = (bet * multiplier).toFixed(2);
+
+          resultDiv.innerText =
+            `Ball → Slot ${slotIndex+1} | Multiplier ${multiplier}x | Payout ₹${payout}`;
+
+          // send to bot
+          Telegram.WebApp.sendData(JSON.stringify({
+            game: "plinko",
+            bet: bet,
+            rows: rows,
+            slot: slotIndex,
+            multiplier: multiplier,
+            payout: payout
+          }));
+        }
+      }
+      animate();
+    }
+  </script>
+</body>
+</html>
